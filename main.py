@@ -30,17 +30,17 @@ def parse_book_page(soup):
     title_split = title_tag.text.split('::')
     book_name = sanitize_filename(title_split[0].strip())
     author_name = sanitize_filename(title_split[1].strip())
-    book_image = soup.find('div', class_='bookimage').find('img')['src']
+    book_image = soup.find(class_='bookimage').find('img')['src']
 
-    find_genres = soup.find('span', class_='d_book').find_all('a')
+    find_genres = soup.find(class_='d_book').find_all('a')
     book_genres = []
     for genre in find_genres:
         book_genres.append(genre.text)
 
-    find_comments = soup.find_all('div', class_='texts')
+    find_comments = soup.find_all(class_='texts')
     comments = []
     for comment in find_comments:
-        comments.append(comment.find('span', class_='black').text)
+        comments.append(comment.find(class_='black').text)
 
     return book_name, author_name, book_image, book_genres, comments
 
