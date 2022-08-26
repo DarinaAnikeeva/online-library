@@ -13,9 +13,9 @@ def download_txt(book_name, text_response, book_id, folder='books/'):
         file.write(text_response.text)
 
 
-def download_images(book_image, folder='images/'):
-    url_book = urljoin('https://tululu.org/', book_image)
-    book_response = requests_get(url_book)
+def download_image(image_link, folder='images/'):
+    url_book = urljoin('https://tululu.org/', image_link)
+    book_response = requests.get(url_book)
     url_book_path = urllib.parse.urlsplit(url_book,
                                           scheme='',
                                           allow_fragments=True)[2]
@@ -25,36 +25,69 @@ def download_images(book_image, folder='images/'):
         file.write(book_response.content)
 
 
-def parse_book_page(soup):
+def parse_book_page(response, number):
+    soup = BeautifulSoup(response.text, 'lxml')
     title_tag = soup.find('table').find('h1')
     title_split = title_tag.text.split('::')
     book_name = sanitize_filename(title_split[0].strip())
     author_name = sanitize_filename(title_split[1].strip())
-    book_image = soup.find(class_='bookimage').find('img')['src']
+    print(number, 'Название: ', book_name, 'Автор: ', author_name )
 
     find_genres = soup.find(class_='d_book').find_all('a')
     book_genres = []
     for genre in find_genres:
         book_genres.append(genre.text)
+    print("Жанры: ", book_genres)
 
     find_comments = soup.find_all(class_='texts')
-    comments = []
+    print("Комментарии: ")
     for comment in find_comments:
-        comments.append(comment.find(class_='black').text)
+        print(comment.find(class_='black').text)
+    print()
 
-    return book_name, author_name, book_image, book_genres, comments
 
 
-def requests_get(url):
-    response = requests.get(url)
-    response.raise_for_status()
-    return response
+def parse_tululu(start_id, end_id):
+    for book_id in range(start_id, end_id + 1):
+        site_url = f'https://tululu.org/b{book_id}/'
+        text_url = f'https://tululu.org/txt.php?id={book_id}'
+
+        site_response = requests.get(site_url)
+        text_response = requests.get(text_url)
+
+        if text_response.url != 'https://tululu.org/':
+            parse_book_page(site_response, book_id)
+
+    download_books()
+
+
+def download_books():
+    numbers = input('Введите номера книг через запятую: ')
+    for number in numbers.split(','):
+        site_url = f'https://tululu.org/b{number.strip()}/'
+        text_url = f'https://tululu.org/txt.php?id={number.strip()}'
+        site_response = requests.get(site_url)
+        text_response = requests.get(text_url)
+
+        soup = BeautifulSoup(site_response.text, 'lxml')
+        title_tag = soup.find('table').find('h1')
+        book_name = title_tag.text.split('::')[0].strip()
+        image_link = soup.find(class_='bookimage').find('img')['src']
+
+        download_image(image_link)
+        download_txt(book_name, text_response, number.strip())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('start_id', nargs='?', default=1, type=int)
-    parser.add_argument('end_id', nargs='?', default=11, type=int)
+    parser.add_argument('start_id',
+                        nargs='?',
+                        default=1,
+                        type=int)
+    parser.add_argument('end_id',
+                        nargs='?',
+                        default=11,
+                        type=int)
     args = parser.parse_args()
 
     start_id = args.start_id
@@ -63,18 +96,4 @@ if __name__ == '__main__':
     os.makedirs("books", exist_ok=True)
     os.makedirs("images", exist_ok=True)
 
-    url = f'https://tululu.org/'
-    response = requests_get(url)
-
-    for book_id in range(start_id, end_id + 1):
-        site_url = f'{url}b{book_id}/'
-        text_url = f'{url}txt.php?id={book_id}'
-
-        site_response = requests_get(site_url)
-        text_response = requests_get(text_url)
-
-        if text_response.url != 'https://tululu.org/':
-            soup = BeautifulSoup(site_response.text, 'lxml')
-            book_name, author_name, book_image, book_genres, comments = parse_book_page(soup)
-            download_images(book_image)
-            download_txt(book_name, text_response, book_id)
+    parse_tululu(start_id, end_id)
