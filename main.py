@@ -1,81 +1,63 @@
 import os
 import requests
-import urllib
 import argparse
+import time
+from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
-from pathvalidate import sanitize_filename
-from urllib.parse import urljoin
+from pathvalidate import sanitize_filepath
+
+def check_for_redirect(response):
+    if response.history:
+        raise requests.TooManyRedirects
 
 
-def download_txt(book_name, text_response, book_id, folder='books/'):
-    with open(f'{folder}{book_id}. {book_name}.txt', 'w', encoding='utf-8') as file:
+def download_txt(book_name, book_id, folder='books'):
+    text_url = f'https://tululu.org/txt.php'
+    text_params = {'id': book_id}
+    text_response = requests.get(text_url, params=text_params)
+
+    check_for_redirect(text_response)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, f'{book_id}. {book_name}')
+    with open(f'{sanitize_filepath(path)}.txt', 'w', encoding='utf-8') as file:
         file.write(text_response.text)
 
 
-def download_image(image_link, folder='images/'):
-    url_book = urljoin('https://tululu.org/', image_link)
+def download_image(book_name, image_link, book_id, folder='images'):
+    url_book = urljoin(f'https://tululu.org/b{book_id}', image_link)
     book_response = requests.get(url_book)
-    url_book_path = urllib.parse.urlsplit(url_book,
-                                          scheme='',
-                                          allow_fragments=True)[2]
+    book_response.raise_for_status()
+    os.makedirs(folder, exist_ok=True)
     path_to_image = os.path.join(folder,
-                                 os.path.split(url_book_path)[1])
-    with open(path_to_image, 'wb') as file:
+                                 os.path.split(book_name)[1])
+    with open(sanitize_filepath(path_to_image), 'wb') as file:
         file.write(book_response.content)
 
 
-def parse_book_page(response, number):
+def parse_book_page(response):
     soup = BeautifulSoup(response.text, 'lxml')
-    title_tag = soup.find('table').find('h1')
-    title_split = title_tag.text.split('::')
-    book_name = sanitize_filename(title_split[0].strip())
-    author_name = sanitize_filename(title_split[1].strip())
-    print(number, 'Название: ', book_name, 'Автор: ', author_name )
+    book_name, author_name = soup.find('table').find('h1').text.split('::')
+    image_link = soup.find(class_='bookimage').find('img')['src']
 
     find_genres = soup.find(class_='d_book').find_all('a')
-    book_genres = []
-    for genre in find_genres:
-        book_genres.append(genre.text)
-    print("Жанры: ", book_genres)
+    book_genres = [genre.text for genre in find_genres]
 
     find_comments = soup.find_all(class_='texts')
-    print("Комментарии: ")
-    for comment in find_comments:
-        print(comment.find(class_='black').text)
-    print()
+    comments = [comment.find(class_='black').text for comment in find_comments]
+
+    return book_name.strip(), image_link
 
 
+def parse_tululu(book_id):
+    site_url = f'https://tululu.org/b{book_id}/'
+    site_response = requests.get(site_url)
+    site_response.raise_for_status()
 
-def parse_tululu(start_id, end_id):
-    for book_id in range(start_id, end_id + 1):
-        site_url = f'https://tululu.org/b{book_id}/'
-        text_url = f'https://tululu.org/txt.php?id={book_id}'
+    book_name, image_link = parse_book_page(site_response)
+    download_txt(book_name, book_id)
+    download_image(image_link, book_id)
 
-        site_response = requests.get(site_url)
-        text_response = requests.get(text_url)
-
-        if text_response.url != 'https://tululu.org/':
-            parse_book_page(site_response, book_id)
-
-    download_books()
-
-
-def download_books():
-    numbers = input('Введите номера книг через запятую: ')
-    for number in numbers.split(','):
-        site_url = f'https://tululu.org/b{number.strip()}/'
-        text_url = f'https://tululu.org/txt.php?id={number.strip()}'
-        site_response = requests.get(site_url)
-        text_response = requests.get(text_url)
-
-        soup = BeautifulSoup(site_response.text, 'lxml')
-        title_tag = soup.find('table').find('h1')
-        book_name = title_tag.text.split('::')[0].strip()
-        image_link = soup.find(class_='bookimage').find('img')['src']
-
-        download_image(image_link)
-        download_txt(book_name, text_response, number.strip())
 
 
 if __name__ == '__main__':
@@ -90,10 +72,19 @@ if __name__ == '__main__':
                         type=int)
     args = parser.parse_args()
 
-    start_id = args.start_id
-    end_id = args.end_id
-
     os.makedirs("books", exist_ok=True)
     os.makedirs("images", exist_ok=True)
 
-    parse_tululu(start_id, end_id)
+    for book_id in range(args.start_id, args.end_id + 1):
+        try:
+            parse_tululu(book_id)
+        except requests.TooManyRedirects:
+            print(f'Книги под номером {book_id} не существует')
+            pass
+        except requests.exceptions.HTTPError as err:
+            print(f'При поискe книги номер {book_id} возникла ошибка {err.response.status_code}. ')
+            pass
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            print('Нет сети, проверьте подключение к интернету ')
+            time.sleep(10)
+            pass
