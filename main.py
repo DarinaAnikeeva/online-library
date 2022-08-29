@@ -49,7 +49,7 @@ def parse_book_page(response):
     return book_name.strip(), image_link
 
 
-def parse_tululu(book_id):
+def starting_download(book_id):
     site_url = f'https://tululu.org/b{book_id}/'
     site_response = requests.get(site_url)
     site_response.raise_for_status()
@@ -77,14 +77,12 @@ if __name__ == '__main__':
 
     for book_id in range(args.start_id, args.end_id + 1):
         try:
-            parse_tululu(book_id)
+            starting_download(book_id)
         except requests.TooManyRedirects:
             print(f'Книги под номером {book_id} не существует')
-            pass
         except requests.exceptions.HTTPError as err:
             print(f'При поискe книги номер {book_id} возникла ошибка {err.response.status_code}. ')
-            pass
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             print('Нет сети, проверьте подключение к интернету ')
             time.sleep(10)
-            pass
+
