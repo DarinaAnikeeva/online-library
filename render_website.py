@@ -1,4 +1,5 @@
 import json
+import os
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from livereload import Server
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -16,13 +17,19 @@ def on_reload():
 
     template = env.get_template('template.html')
 
-    book_params = list(chunked(params_dicts, 2))
-    rendered_page = template.render(
-        books_params=book_params,
-    )
+    os.makedirs('pages',  exist_ok=True)
+    books_pages = list(chunked(params_dicts, 15))
 
-    with open('index.html', 'w', encoding="utf8") as file:
-        file.write(rendered_page)
+    for number, books_page in enumerate(books_pages):
+        book_params = list(chunked(books_page, 2))
+        rendered_page = template.render(
+            books_params=book_params,
+            books_pages=len(books_pages),
+            page_number=number+1
+        )
+
+        with open(f'pages\index{number+1}.html', 'w', encoding="utf8") as file:
+            file.write(rendered_page)
 
 on_reload()
 
