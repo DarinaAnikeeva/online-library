@@ -35,6 +35,7 @@ on_reload()
 
 server = Server()
 server.watch('template.html', on_reload)
+server.watch('books_params.json', on_reload)
 server.serve(root='.')
 
 
