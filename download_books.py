@@ -4,7 +4,7 @@ import json
 import time
 import argparse
 
-from main import parse_book_page
+from parse_page import parse_book_page
 from parse_tululu_category import parse_category_page
 from urllib.parse import urljoin
 from pathvalidate import sanitize_filepath
